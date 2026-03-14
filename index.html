@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>RF Storm Canvass</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #273348;
+    --border: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --hot: #ef4444;
+    --hot-bg: rgba(239,68,68,0.12);
+    --hot-border: rgba(239,68,68,0.3);
+    --warm: #f59e0b;
+    --warm-bg: rgba(245,158,11,0.12);
+    --warm-border: rgba(245,158,11,0.3);
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --purple: #a855f7;
+    --radius: 12px;
+    --font: 'DM Sans', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; }
+
+  /* ── APP SHELL ── */
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px 10px;
+    flex-shrink: 0;
+  }
+  .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 32px; height: 32px; background: var(--hot); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .logo-text { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo-sub { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .sync-dot.offline { background: var(--muted); box-shadow: none; animation: none; }
+
+  /* ── TABS ── */
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    flex: 1; padding: 8px 0; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-family: var(--font);
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .tab.active-hot { background: var(--hot-bg); border-color: var(--hot-border); color: var(--hot); }
+  .tab.active-warm { background: var(--warm-bg); border-color: var(--warm-border); color: var(--warm); }
+  .tab .badge { background: currentColor; color: var(--bg); border-radius: 20px; padding: 1px 6px; font-size: 11px; font-weight: 700; }
+
+  /* ── SEARCH BAR ── */
+  .search-bar {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; margin: 10px 16px 0;
+    flex-shrink: 0;
+  }
+  .search-bar input {
+    flex: 1; background: none; border: none; outline: none; color: var(--text);
+    font-family: var(--font); font-size: 14px; padding: 9px 0;
+  }
+  .search-bar input::placeholder { color: var(--muted); }
+  .search-icon { color: var(--muted); font-size: 14px; }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    display: flex; gap: 8px; padding: 10px 16px 0; flex-shrink: 0;
+  }
+  .stat-pill {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 8px; text-align: center;
+  }
+  .stat-pill .num { font-size: 18px; font-weight: 700; font-family: var(--mono); }
+  .stat-pill .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .stat-pill.green .num { color: var(--green); }
+  .stat-pill.blue .num { color: var(--blue); }
+  .stat-pill.purple .num { color: var(--purple); }
+
+  /* ── LEAD LIST ── */
+  #list { flex: 1; overflow-y: auto; padding: 10px 16px 80px; -webkit-overflow-scrolling: touch; }
+  #list::-webkit-scrollbar { display: none; }
+
+  .lead-card {
+    background: var(--surface); border-radius: var(--radius); margin-bottom: 10px;
+    border: 1px solid var(--border); overflow: hidden; transition: border-color .15s;
+    cursor: pointer;
+  }
+  .lead-card.hot { border-left: 3px solid var(--hot); }
+  .lead-card.warm { border-left: 3px solid var(--warm); }
+  .lead-card.status-spoke { border-left-color: var(--green); }
+  .lead-card.status-inspection { border-left-color: var(--purple); }
+  .lead-card.status-not-interested { opacity: .5; }
+
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 14px 8px; gap: 10px; }
+  .card-name { font-size: 14px; font-weight: 600; line-height: 1.3; }
+  .card-address { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .hail-badge { font-size: 13px; font-weight: 700; font-family: var(--mono); }
+  .hail-badge.big { color: var(--hot); }
+  .hail-badge.med { color: var(--warm); }
+  .tier-label {
+    font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 2px 6px;
+    border-radius: 4px; text-transform: uppercase;
+  }
+  .tier-label.hot { background: var(--hot-bg); color: var(--hot); border: 1px solid var(--hot-border); }
+  .tier-label.warm { background: var(--warm-bg); color: var(--warm); border: 1px solid var(--warm-border); }
+
+  .card-meta { display: flex; gap: 8px; padding: 0 14px 10px; flex-wrap: wrap; }
+  .meta-tag {
+    font-size: 11px; color: var(--muted); background: var(--surface2);
+    padding: 3px 7px; border-radius: 5px;
+  }
+
+  /* ── STATUS BUTTONS ── */
+  .status-row { display: flex; gap: 6px; padding: 0 14px 12px; flex-wrap: wrap; }
+  .status-btn {
+    font-size: 11px; font-weight: 600; font-family: var(--font);
+    padding: 6px 10px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--muted); cursor: pointer;
+    transition: all .12s; white-space: nowrap;
+  }
+  .status-btn:hover { opacity: .85; }
+  .status-btn.active { color: var(--bg); }
+  .status-btn[data-s="no-answer"].active { background: #64748b; border-color: #64748b; color: #fff; }
+  .status-btn[data-s="not-home"].active { background: #f59e0b; border-color: #f59e0b; color: #000; }
+  .status-btn[data-s="spoke"].active { background: var(--green); border-color: var(--green); color: #000; }
+  .status-btn[data-s="inspection"].active { background: var(--purple); border-color: var(--purple); }
+  .status-btn[data-s="not-interested"].active { background: #ef4444; border-color: #ef4444; }
+
+  /* ── NOTES ── */
+  .notes-row { padding: 0 14px 12px; display: none; }
+  .notes-row.open { display: block; }
+  .notes-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--font); font-size: 13px;
+    padding: 8px 10px; outline: none; resize: none; min-height: 60px;
+    transition: border-color .15s;
+  }
+  .notes-input:focus { border-color: var(--blue); }
+  .notes-save-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+  .notes-save-row .ts { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .save-btn {
+    background: var(--blue); color: white; border: none; border-radius: 7px;
+    padding: 6px 14px; font-family: var(--font); font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .save-btn:hover { opacity: .85; }
+
+  /* ── ACTION ROW ── */
+  .action-row { display: flex; gap: 8px; padding: 0 14px 12px; }
+  .action-btn {
+    flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); font-family: var(--font);
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all .12s;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .action-btn.call { color: var(--green); border-color: rgba(34,197,94,.3); }
+  .action-btn.map { color: var(--blue); border-color: rgba(59,130,246,.3); }
+  .action-btn.notes { color: var(--muted); }
+  .action-btn.notes.open-notes { color: var(--blue); border-color: rgba(59,130,246,.3); }
+
+  /* ── ROUTE BUTTON ── */
+  #route-fab {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--blue); color: white; border: none; border-radius: 24px;
+    padding: 13px 24px; font-family: var(--font); font-size: 14px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; gap: 8px; z-index: 100;
+    box-shadow: 0 4px 20px rgba(59,130,246,.4); transition: all .15s;
+    white-space: nowrap;
+  }
+  #route-fab:hover { background: #2563eb; transform: translateX(-50%) translateY(-2px); }
+  #route-fab .sel-count { background: rgba(255,255,255,.25); border-radius: 12px; padding: 2px 8px; font-size: 12px; }
+
+  /* ── SELECT OVERLAY ── */
+  .select-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(59,130,246,.08); border-radius: var(--radius);
+    pointer-events: none; opacity: 0; transition: opacity .12s;
+  }
+  .lead-card.selected .select-overlay { opacity: 1; }
+  .lead-card.selected { border-color: rgba(59,130,246,.5) !important; }
+  .select-check {
+    position: absolute; top: 10px; right: 10px; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--surface2); border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: 11px;
+    transition: all .12s;
+  }
+  .lead-card.selected .select-check { background: var(--blue); border-color: var(--blue); }
+  .card-inner { position: relative; }
+
+  /* ── SELECT MODE BANNER ── */
+  #select-banner {
+    display: none; background: var(--blue); padding: 8px 16px;
+    flex-shrink: 0; align-items: center; justify-content: space-between;
+  }
+  #select-banner.visible { display: flex; }
+  #select-banner span { font-size: 13px; font-weight: 600; }
+  #select-banner button {
+    background: rgba(255,255,255,.2); border: none; color: white; border-radius: 6px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: var(--font);
+  }
+
+  /* ── ROUTE MODE ── */
+  .route-mode .status-row, .route-mode .notes-row, .route-mode .action-row { display: none !important; }
+
+  /* ── EMPTY STATE ── */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty p { font-size: 14px; }
+
+  /* ── LOADING ── */
+  #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 16px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { color: var(--muted); font-size: 14px; }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 18px; font-size: 13px; font-weight: 500;
+    opacity: 0; transition: all .2s; z-index: 200; white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,.3);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error { border-color: var(--hot); color: var(--hot); }
+
+  /* ── LONG HOLD HINT ── */
+  .hint-bar { text-align: center; padding: 4px 0 0; font-size: 11px; color: var(--muted); flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="header-top">
+      <div class="logo">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <div class="logo-text">Storm Canvass</div>
+          <div class="logo-sub">Roofing Force · Mar 10 2026</div>
+        </div>
+      </div>
+      <div id="sync-dot" class="sync-dot offline" title="Supabase sync"></div>
+    </div>
+    <div class="tabs">
+      <button class="tab active-hot" onclick="setTab('HOT')" id="tab-hot">
+        🔥 HOT <span class="badge" id="hot-badge">35</span>
+      </button>
+      <button class="tab" onclick="setTab('WARM')" id="tab-warm">
+        ☀️ WARM <span class="badge" id="warm-badge">41</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="select-banner">
+    <span id="select-count-text">0 selected</span>
+    <div style="display:flex;gap:8px">
+      <button onclick="openGoogleMapsRoute()">📍 Open in Maps</button>
+      <button onclick="exitSelectMode()">✕ Cancel</button>
+    </div>
+  </div>
+
+  <div class="search-bar">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="search" placeholder="Search name, address, ZIP…" oninput="renderList()">
+  </div>
+
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-pill green"><div class="num" id="stat-spoke">0</div><div class="lbl">Spoke To</div></div>
+    <div class="stat-pill purple"><div class="num" id="stat-insp">0</div><div class="lbl">Inspections</div></div>
+    <div class="stat-pill blue"><div class="num" id="stat-remain">0</div><div class="lbl">Remaining</div></div>
+  </div>
+
+  <div class="hint-bar">Hold card to add to route</div>
+
+  <div id="list">
+    <div id="loading">
+      <div class="spinner"></div>
+      <p>Loading leads…</p>
+    </div>
+  </div>
+
+  <button id="route-fab" style="display:none" onclick="toggleSelectMode()">
+    📍 Plan Route <span class="sel-count" id="fab-count">0</span>
+  </button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG — replace with your Supabase credentials
+// ═══════════════════════════════════════════════
+const SUPABASE_URL = 'https://inwtlvzkwaslofqfrlpc.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlud3Rsdnprd2FzbG9mcWZybHBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MzI2NDcsImV4cCI6MjA4ODMwODY0N30.bpjIExAjKo54a4X8QqgR2gn6LpVseEYopXk2RGQdQrE';
+const TABLE_LEADS = 'storm_leads';
+const TABLE_UPDATES = 'lead_updates';
+
+// ═══════════════════════════════════════════════
+// EMBEDDED LEAD DATA
+// ═══════════════════════════════════════════════
+const SEED_LEADS = [{"id":1,"tier":"HOT","score":13,"name":"Cathy Statler","phone":"815-603-2765","email":"cath1960@comcast.net","address":"Bishop Ct, Bradley, IL 60915","street":"Bishop Ct","city":"Bradley","state":"IL","zip":"60915","manufacturer":"Boral","profile":"Pine Crest Shake","color":"Ironwood","size_sq":"21","hail_met":"5.5","hail_algo":"4","wind":""},{"id":2,"tier":"HOT","score":12,"name":"Ed & Julie Dougherty","phone":"816-805-2853","email":"Alt Phone: 816-891-9990","address":"NW Klamm Dr, KCMO, MO 64151","street":"NW Klamm Dr","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Shake","color":"Driftwood","size_sq":"74","hail_met":"3.5","hail_algo":"3.5","wind":""},{"id":3,"tier":"HOT","score":12,"name":"Paul Bunnell","phone":"913-530-0651","email":"Alt Phone: 86-941-2056","address":"NW Tiffany Springs Rd, KCMO, MO 64154","street":"NW Tiffany Springs Rd","city":"KCMO","state":"MO","zip":"64154","manufacturer":"Boral","profile":"Barrel Vault","color":"Devonshire","size_sq":"49","hail_met":"3.5","hail_algo":"2.75","wind":""},{"id":4,"tier":"HOT","score":12,"name":"Bethany Snyder","phone":"913-461-7614","email":"kcnovels@msn.com","address":"Georgia Ave, Kansas City, KS 66109","street":"Georgia Ave","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Boral","profile":"Pacific Tile","color":"Timberwood","size_sq":"34.5","hail_met":"3.5","hail_algo":"2","wind":""},{"id":5,"tier":"HOT","score":12,"name":"Elizabeth Burt","phone":"385-444-8257","email":"elizabeth-burt@hotmail.com","address":"NW Blair Rd, KCMO, MO 64152","street":"NW Blair Rd","city":"KCMO","state":"MO","zip":"64152","manufacturer":"Boral","profile":"Pine Crest Shake","color":"Charcoal","size_sq":"16","hail_met":"3.5","hail_algo":"2.5","wind":""},{"id":6,"tier":"HOT","score":11,"name":"Ryan Terrones","phone":"515-203-6720","email":"terronesr@gmail.com","address":"Yecker Ave, Kansas City, KS 66109","street":"Yecker Ave","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Owens Corning","profile":"Duration","color":"Sand Dune","size_sq":"18.83","hail_met":"3.5","hail_algo":"3","wind":""},{"id":7,"tier":"HOT","score":11,"name":"Phillip Hernandez","phone":"913-302-7530","email":"","address":"N Mattox Rd, KCMO, MO 64151","street":"N Mattox Rd","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Gerard","profile":"Gerard Tile","color":"Chestnut","size_sq":"55","hail_met":"3.5","hail_algo":"3.75","wind":""},{"id":8,"tier":"HOT","score":11,"name":"Dr. Charles Alexander","phone":"913-321-3355","email":"Alt Phone: 913-334-5531","address":"N 79 St, Kansas City, KS 66112","street":"N 79 St","city":"Kansas City","state":"KS","zip":"66112","manufacturer":"Boral","profile":"Tile","color":"Monte Carlo","size_sq":"42","hail_met":"2.5","hail_algo":"2.75","wind":""},{"id":9,"tier":"HOT","score":11,"name":"Michael & Marlene Jackson","phone":"913-549-0029","email":"mallenjackson@gmail.com","address":"Georgia Ave, Kansas City, KS 66109","street":"Georgia Ave","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Owens Corning","profile":"Duration","color":"Teak","size_sq":"19","hail_met":"3.5","hail_algo":"3","wind":""},{"id":10,"tier":"HOT","score":11,"name":"Deborah & Jermey Kobalt/Kailer","phone":"913-242-8995","email":"prairiesmurf@gmail.com","address":"N 89th St, Kansas City, KS 66109","street":"N 89th St","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Owens Corning","profile":"Oakridge","color":"Brownwood","size_sq":"18.82","hail_met":"3.5","hail_algo":"2.25","wind":""},{"id":11,"tier":"HOT","score":11,"name":"Dan Tellman","phone":"913-788-9008","email":"","address":"Beverly Dr, Kansas City, KS 66104","street":"Beverly Dr","city":"Kansas City","state":"KS","zip":"66104","manufacturer":"Boral","profile":"Tile","color":"Spanish Red","size_sq":"13","hail_met":"3.5","hail_algo":"3.25","wind":""},{"id":12,"tier":"HOT","score":11,"name":"Cleve McConnell","phone":"913-940-4459","email":"mrclevemcconnell@gmail.com","address":"N 70th Terrace, Kansas City, KS 66109","street":"N 70th Terrace","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Owens Corning","profile":"TruDefinition Duration AR","color":"Onyx Black","size_sq":"16","hail_met":"3.5","hail_algo":"3","wind":""},{"id":13,"tier":"HOT","score":11,"name":"Steve Easley","phone":"816-505-0214","email":"","address":"N Mattox Rd, KCMO, MO 64151","street":"N Mattox Rd","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Shake","color":"Weathered Slate","size_sq":"49","hail_met":"3.5","hail_algo":"3.75","wind":""},{"id":14,"tier":"HOT","score":11,"name":"Ethan Sherwood","phone":"785-285-0785","email":"sherwood.ethan@gmail.com","address":"Creek View Dr, KCMO, MO 64152","street":"Creek View Dr","city":"KCMO","state":"MO","zip":"64152","manufacturer":"Owens Corning","profile":"Duration","color":"Estate Gray","size_sq":"18.74","hail_met":"3.5","hail_algo":"2.5","wind":""},{"id":15,"tier":"HOT","score":11,"name":"Dan Bernhart","phone":"816-741-9222","email":"","address":"NW 83 St, KCMO, MO 64152","street":"NW 83 St","city":"KCMO","state":"MO","zip":"64152","manufacturer":"Boral","profile":"Tile","color":"Choice","size_sq":"54","hail_met":"3.5","hail_algo":"2.75","wind":""},{"id":16,"tier":"HOT","score":11,"name":"Annalee Ford & Phillip John Anderson","phone":"417-838-9274","email":"aaf4824@gmail.com","address":"NW 80th St, KCMO, MO 64118","street":"NW 80th St","city":"KCMO","state":"MO","zip":"64118","manufacturer":"Owens Corning","profile":"Oakridge AR","color":"Driftwood","size_sq":"15.56","hail_met":"3.5","hail_algo":"2","wind":""},{"id":17,"tier":"HOT","score":11,"name":"Brian  Jones","phone":"248-207-3791","email":"brianj@proelect.com","address":"N Bedford Ave, KCMO, MO 64151","street":"N Bedford Ave","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Owens Corning","profile":"Oakridge","color":"Estate Grey","size_sq":"26.21","hail_met":"3.5","hail_algo":"2.75","wind":""},{"id":18,"tier":"HOT","score":11,"name":"Richard & Ruth Hinton","phone":"(816) 729-6356","email":"richard.hinton1@icloud.com","address":"NW Berkley St, KCMO, MO 64152","street":"NW Berkley St","city":"KCMO","state":"MO","zip":"64152","manufacturer":"Owens Corning","profile":"Oakridge","color":"Driftwood","size_sq":"17.45","hail_met":"3.5","hail_algo":"3","wind":""},{"id":19,"tier":"HOT","score":11,"name":"Josh Rothermel","phone":"816-863-7115","email":"joshrothermel@outlook.com","address":"N Robinhood Ave, KCMO, MO 64154","street":"N Robinhood Ave","city":"KCMO","state":"MO","zip":"64154","manufacturer":"Owens Corning","profile":"Oakrige AR","color":"Driftwood","size_sq":"28.66","hail_met":"3.5","hail_algo":"2.5","wind":""},{"id":20,"tier":"HOT","score":11,"name":"Michael & Nicole Nigro","phone":"816-506-6439","email":"mnigro21@outlook.com","address":"N Baltimore Ave, KCMO, MO 64155","street":"N Baltimore Ave","city":"KCMO","state":"MO","zip":"64155","manufacturer":"Owens Corning","profile":"Oakridge AR","color":"Onyx Black","size_sq":"18.67","hail_met":"3.5","hail_algo":"2.25","wind":""},{"id":21,"tier":"HOT","score":11,"name":"Eric Sheridan","phone":"913-980-6895","email":"ericsheridan@mac.com","address":"NE 100th St, KCMO, MO 64155","street":"NE 100th St","city":"KCMO","state":"MO","zip":"64155","manufacturer":"Drexel","profile":"24 GA","color":"Matte Black","size_sq":"28.98","hail_met":"3.5","hail_algo":"2","wind":""},{"id":22,"tier":"HOT","score":11,"name":"Kenneth & Kathy McBride","phone":"816-741-4695","email":"","address":"NW 59th Ter, KCMO, MO 64151","street":"NW 59th Ter","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Shake","color":"Weathered Slate","size_sq":"27","hail_met":"3.5","hail_algo":"3.75","wind":""},{"id":23,"tier":"HOT","score":11,"name":"James Dill","phone":"816-587-1864","email":"","address":"NW 62nd St, KCMO, MO 64151","street":"NW 62nd St","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Tile","color":"Charcoal","size_sq":"17","hail_met":"3.5","hail_algo":"3.75","wind":""},{"id":24,"tier":"HOT","score":11,"name":"Michael G. & Janice L. Smith","phone":"816-587-7638","email":"","address":"NW 58 Terrace, KCMO, MO 64151","street":"NW 58 Terrace","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Canyon Shake","color":"Country Blend","size_sq":"27","hail_met":"3.5","hail_algo":"3.5","wind":""},{"id":25,"tier":"HOT","score":11,"name":"Rembrandts Restaurant - Brad Green","phone":"913-436-8700","email":"","address":"NW Barry Rd, KCMO, MO 64154","street":"NW Barry Rd","city":"KCMO","state":"MO","zip":"64154","manufacturer":"Boral","profile":"Shake","color":"Driftwood","size_sq":"32","hail_met":"3.5","hail_algo":"2.5","wind":""},{"id":26,"tier":"HOT","score":11,"name":"William Gazall","phone":"816-665-9752","email":"wmgazall@outlook.com","address":"N Central St, KCMO, MO 64155","street":"N Central St","city":"KCMO","state":"MO","zip":"64155","manufacturer":"Owens Corning","profile":"Oakridge AR","color":"Driftwood","size_sq":"20.94","hail_met":"3.5","hail_algo":"2.25","wind":""},{"id":27,"tier":"HOT","score":11,"name":"Bryan Koons","phone":"816-868-7624","email":"","address":"N Chatham Ave, KCMO, MO 64151","street":"N Chatham Ave","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Gerard","profile":"Canyon Shake","color":"Windsor","size_sq":"60","hail_met":"3.5","hail_algo":"3.75","wind":""},{"id":28,"tier":"HOT","score":11,"name":"David Filbert","phone":"816-522-8178","email":"david.filbert@gmail.com","address":"N 60 St, Kansas City, KS 66104","street":"N 60 St","city":"Kansas City","state":"KS","zip":"66104","manufacturer":"AG","profile":"26","color":"Burnished Slate","size_sq":"17.42","hail_met":"3.5","hail_algo":"3.25","wind":""},{"id":29,"tier":"HOT","score":11,"name":"Kyeong Choe","phone":"816-506-8188","email":"kchoe@midlandradio.com","address":"NW View Crest Dr, KCMO, MO 64155","street":"NW View Crest Dr","city":"KCMO","state":"MO","zip":"64155","manufacturer":"Certainteed","profile":"Landmark","color":"Mission Brown","size_sq":"24","hail_met":"3.5","hail_algo":"2","wind":""},{"id":30,"tier":"HOT","score":11,"name":"Bruce Hahn","phone":"816-587-1663","email":"","address":"N Dawn Ct, KCMO, MO 64151","street":"N Dawn Ct","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Gerard","profile":"Stonewood Shake","color":"Coronado","size_sq":"25","hail_met":"3.5","hail_algo":"3.5","wind":""},{"id":31,"tier":"HOT","score":11,"name":"Teresa Loar","phone":"816-863-2552","email":"taloar@aol.com","address":"NW Bradford Ct, KCMO, MO 64151","street":"NW Bradford Ct","city":"KCMO","state":"MO","zip":"64151","manufacturer":"GAF","profile":"Timberline HD AR","color":"Terra Bronze","size_sq":"13","hail_met":"3.5","hail_algo":"2.25","wind":""},{"id":32,"tier":"HOT","score":11,"name":"Matt Mondt","phone":"816-517-5670","email":"mwmind81@gmail.com","address":"NW Coronado St, KCMO, MO 64152","street":"NW Coronado St","city":"KCMO","state":"MO","zip":"64152","manufacturer":"Owens Corning","profile":"Oakridge AR","color":"Brownwood","size_sq":"13.86","hail_met":"3.5","hail_algo":"2.75","wind":""},{"id":33,"tier":"HOT","score":11,"name":"LaQuinta Inn","phone":"816-447-6691","email":"","address":"NW 83 St, KCMO, MO 64152","street":"NW 83 St","city":"KCMO","state":"MO","zip":"64152","manufacturer":"Gerard","profile":"Granit Ridge","color":"Spanish Red","size_sq":"160","hail_met":"3.5","hail_algo":"2.75","wind":""},{"id":34,"tier":"HOT","score":11,"name":"Temesgen Wakwaya","phone":"816-741-3125","email":"","address":"N Camden Ave, KCMO, MO 64151","street":"N Camden Ave","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Tile","color":"Terra Cotta","size_sq":"39","hail_met":"3.5","hail_algo":"3.75","wind":""},{"id":35,"tier":"HOT","score":11,"name":"Michael Janicke","phone":"816-436-5159","email":"","address":"NE 88th St, KCMO, MO 64155","street":"NE 88th St","city":"KCMO","state":"MO","zip":"64155","manufacturer":"Gerard","profile":"Guardian","color":"Weathered Slate","size_sq":"23","hail_met":"3.5","hail_algo":"1.5","wind":""},{"id":36,"tier":"WARM","score":10,"name":"Edward Gibbs","phone":"913-299-4123","email":"","address":"N 75th Terrace, Kansas City, KS 66109","street":"N 75th Terrace","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"GAF","profile":"Liberty","color":"Black","size_sq":"4","hail_met":"3.5","hail_algo":"3","wind":""},{"id":37,"tier":"WARM","score":10,"name":"Collin Reed","phone":"816-805-2871","email":"","address":"N Tracy Ave, KCMO, MO 64155","street":"N Tracy Ave","city":"KCMO","state":"MO","zip":"64155","manufacturer":"Certainteed","profile":"Presidential Ultra","color":"Charcoal Black","size_sq":"19","hail_met":"3.5","hail_algo":"1.75","wind":""},{"id":38,"tier":"WARM","score":10,"name":"Jeff & Aubrey Holmes","phone":"816-923-7944","email":"","address":"NW Winter Ave, KCMO, MO 64153","street":"NW Winter Ave","city":"KCMO","state":"MO","zip":"64153","manufacturer":"Boral","profile":"Granite Ridge","color":"Weathered Slate","size_sq":"24","hail_met":"2.5","hail_algo":"3","wind":""},{"id":39,"tier":"WARM","score":10,"name":"Kim Sutten","phone":"816-507-9277","email":"suttenkim@gmail.com","address":"NW Evelyn St, KCMO, MO 64151","street":"NW Evelyn St","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Owens Corning","profile":"Duration","color":"Driftwood","size_sq":"17.52","hail_met":"2.5","hail_algo":"2.5","wind":""},{"id":40,"tier":"WARM","score":10,"name":"Homeowner","phone":"","email":"","address":"N Mattox Rd, KCMO, MO 64151","street":"N Mattox Rd","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Tile","color":"Chestnut","size_sq":"","hail_met":"3.5","hail_algo":"3.75","wind":""},{"id":41,"tier":"WARM","score":10,"name":"Susan Hamrick","phone":"913-593-3046","email":"suzeqz61@gmail.com","address":"N 63rd St, Kansas City, KS 66104","street":"N 63rd St","city":"Kansas City","state":"KS","zip":"66104","manufacturer":"MPI","profile":"Ag Panel","color":"Classic green","size_sq":"16.39","hail_met":"2.5","hail_algo":"3","wind":""},{"id":42,"tier":"WARM","score":10,"name":"Ernie Watson","phone":"913-705-1916","email":"","address":"Leavenworth Rd, Kansas City, KS 66109","street":"Leavenworth Rd","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Tamko","profile":"Heritage","color":"Rustic Evergreen","size_sq":"24","hail_met":"3.5","hail_algo":"3","wind":""},{"id":43,"tier":"WARM","score":10,"name":"Homeowner","phone":"","email":"","address":"NW Klamm Dr, KCMO, MO 64151","street":"NW Klamm Dr","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Tile","color":"Driftwood","size_sq":"","hail_met":"3.5","hail_algo":"3.5","wind":""},{"id":44,"tier":"WARM","score":10,"name":"Nhia Her","phone":"913-314-9673","email":"nhia_her79@outlook.com","address":"Haskell Dr, Kansas City, KS 66109","street":"Haskell Dr","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Owens Corning","profile":"Oakridge AR","color":"Driftwood","size_sq":"26","hail_met":"2.5","hail_algo":"3","wind":""},{"id":45,"tier":"WARM","score":10,"name":"Scott Estes","phone":"913-207-7521","email":"bbsestes@gmail.com","address":"Parallel Pkwy, Kansas City, KS 66109","street":"Parallel Pkwy","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Owens Corning","profile":"Oakridge AR","color":"Peppermill Gray","size_sq":"12.53","hail_met":"2.5","hail_algo":"1.75","wind":""},{"id":46,"tier":"WARM","score":10,"name":"Homeowner","phone":"","email":"","address":"NW Monticello Dr, KCMO, MO 64152","street":"NW Monticello Dr","city":"KCMO","state":"MO","zip":"64152","manufacturer":"Boral","profile":"Shake","color":"Driftwood","size_sq":"","hail_met":"3.5","hail_algo":"3.25","wind":""},{"id":47,"tier":"WARM","score":10,"name":"Homeowner","phone":"","email":"","address":"NW Tiffany Springs Rd, KCMO, MO 64154","street":"NW Tiffany Springs Rd","city":"KCMO","state":"MO","zip":"64154","manufacturer":"Boral","profile":"Shake","color":"Charcoal","size_sq":"","hail_met":"3.5","hail_algo":"2.75","wind":""},{"id":48,"tier":"WARM","score":10,"name":"Homeowner","phone":"","email":"","address":"NW Dawn Ln, KCMO, MO 64151","street":"NW Dawn Ln","city":"KCMO","state":"MO","zip":"64151","manufacturer":"Boral","profile":"Shake","color":"Coronado","size_sq":"","hail_met":"3.5","hail_algo":"3.5","wind":""},{"id":49,"tier":"WARM","score":9,"name":"Randall Pallesen","phone":"913-901-7926","email":"randall@bisonit.com","address":"N 68th St, Kansas City, KS 66109","street":"N 68th St","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Boral","profile":"Pine Crest Shake","color":"Timberwood","size_sq":"16.16","hail_met":"1.75","hail_algo":"2.75","wind":""},{"id":50,"tier":"WARM","score":9,"name":"Deborah Farachi","phone":"913-788-9693","email":"","address":"N 75th Terrace, Kansas City, KS 66109","street":"N 75th Terrace","city":"Kansas City","state":"KS","zip":"66109","manufacturer":"Guardina","profile":"","color":"Caf","size_sq":"21","hail_met":"2.5","hail_algo":"3","wind":""},{"id":51,"tier":"WARM","score":9,"name":"John & Mary Pierce","phone":"913-205-5476","email":"marypierce228@hughes.net","address":"Stillwell Rd, Bonner Springs, KS 66012","street":"Stillwell Rd","city":"Bonner Springs","state":"KS","zip":"66012","manufacturer":"Boral","profile":"Pine Crest Shake","color":"Timberwood","size_sq":"40","hail_met":"1.75","hail_algo":"","wind":""},{"id":52,"tier":"WARM","score":9,"name":"Larry Ashley","phone":"913-952-9304","email":"glennstephen@hotmail.com","address":"N 94th St, Kansas City, KS 66112","street":"N 94th St","city":"Kansas City","state":"KS","zip":"66112","manufacturer":"Boral","profile":"Tile","color":"Barcelona","size_sq":"20","hail_met":"1.75","hail_algo":"2","wind":""},{"id":53,"tier":"WARM","score":8,"name":"Margo Aldridge","phone":"816-206-0281","email":"Alt Phone: 816-941-0266","address":"Glen Arbor Rd, KCMO, MO 64114","street":"Glen Arbor Rd","city":"KCMO","state":"MO","zip":"64114","manufacturer":"Boral","profile":"Tile","color":"Charcoal","size_sq":"56","hail_met":"1.5","hail_algo":"1.25","wind":""},{"id":54,"tier":"WARM","score":8,"name":"David Batcheller","phone":"816-550-6590","email":"","address":"NW Saddle Club Ct, KCMO, MO 64152","street":"NW Saddle Club Ct","city":"KCMO","state":"MO","zip":"64152","manufacturer":"Boral","profile":"Tile","color":"Terra Cotta","size_sq":"68","hail_met":"","hail_algo":"1.75","wind":""},{"id":55,"tier":"WARM","score":8,"name":"Allagra/Judy Kincaid/Dangerfield","phone":"913-663-0816","email":"allegra.kincaid@midwesttrust.com","address":"N 79 Terrace, Kansas City, KS 66112","street":"N 79 Terrace","city":"Kansas City","state":"KS","zip":"66112","manufacturer":"Owens Corning","profile":"TruDefinition Duration AR","color":"Driftwood","size_sq":"40.01","hail_met":"1.75","hail_algo":"2.5","wind":""},{"id":56,"tier":"WARM","score":8,"name":"Rodney & Tammy Buckallew","phone":"623-451-0500","email":"tbuckallew@hotmail.com","address":"137 St, Bonner Springs, KS 66012","street":"137 St","city":"Bonner Springs","state":"KS","zip":"66012","manufacturer":"Owens Corning","profile":"Duration","color":"Driftwood","size_sq":"25.43","hail_met":"1.75","hail_algo":"","wind":""},{"id":57,"tier":"WARM","score":8,"name":"Mike Malnar","phone":"913-387-9162","email":"malnarremodeling@yahoo.com","address":"Stillwell Rd, Bonner Springs, KS 66012","street":"Stillwell Rd","city":"Bonner Springs","state":"KS","zip":"66012","manufacturer":"Owens Corning","profile":"Duration","color":"Driftwood","size_sq":"48.98","hail_met":"1.75","hail_algo":"1.25","wind":""},{"id":58,"tier":"WARM","score":8,"name":"Mitchell & Linda Mellott","phone":"913-441-6984","email":"","address":"W Insley Ave, Bonner Springs, KS 66012","street":"W Insley Ave","city":"Bonner Springs","state":"KS","zip":"66012","manufacturer":"Gerard","profile":"Capistrano Tile","color":"Barcelona","size_sq":"30","hail_met":"1.75","hail_algo":"1.25","wind":""},{"id":59,"tier":"WARM","score":8,"name":"Allegra (Carmona) Kincaid","phone":"913-663-0816","email":"allegra.kincaid@midwesttrust.com","address":"Everett Ave, Kansas City, KS 66112","street":"Everett Ave","city":"Kansas City","state":"KS","zip":"66112","manufacturer":"Certainteed","profile":"Presidential Shake","color":"Aged Black","size_sq":"24","hail_met":"1.75","hail_algo":"2.5","wind":""},{"id":60,"tier":"WARM","score":8,"name":"Michele Foulks","phone":"913-220-3693","email":"michelefoulks@yahoo.com","address":"N 79 St, Kansas City, KS 66112","street":"N 79 St","city":"Kansas City","state":"KS","zip":"66112","manufacturer":"Owens Corning","profile":"TruDefinition Duration Designer","color":"Black Sable","size_sq":"33","hail_met":"1.75","hail_algo":"2.5","wind":""},{"id":61,"tier":"WARM","score":8,"name":"Mark Betsch","phone":"913-851-0930","email":"nqbn2profit@gmail.com","address":"W Harmony Ln, Olathe, KS 66062","street":"W Harmony Ln","city":"Olathe","state":"KS","zip":"66062","manufacturer":"Boral","profile":"Tile","color":"Charcoal","size_sq":"53","hail_met":"1.5","hail_algo":"1.5","wind":""},{"id":62,"tier":"WARM","score":8,"name":"Brandon & Gena Shively","phone":"816-405-0503","email":"brandonshively45@gmail.com","address":"NW 64th Terrace, KCMO, MO 64118","street":"NW 64th Terrace","city":"KCMO","state":"MO","zip":"64118","manufacturer":"Owens Corning","profile":"Oakridge","color":"Onyx Black","size_sq":"19","hail_met":"1.75","hail_algo":"1.75","wind":""},{"id":63,"tier":"WARM","score":7,"name":"Homeowner","phone":"","email":"","address":"W Insley Ave, Bonner Springs, KS 66012","street":"W Insley Ave","city":"Bonner Springs","state":"KS","zip":"66012","manufacturer":"Boral","profile":"Tile","color":"Barcelona","size_sq":"","hail_met":"1.75","hail_algo":"1.25","wind":""},{"id":64,"tier":"WARM","score":7,"name":"Brenda Potter","phone":"913-422-4616","email":"","address":"Castle Dr, Bonner Springs, KS 66012","street":"Castle Dr","city":"Bonner Springs","state":"KS","zip":"66012","manufacturer":"Ag Panel","profile":"26 GS Strongseam AG Panel","color":"","size_sq":"22","hail_met":"1.75","hail_algo":"1","wind":""},{"id":65,"tier":"WARM","score":7,"name":"Donald Luttrell","phone":"913-422-4608","email":"","address":"Armour Ave, Bonner Springs, KS 66012","street":"Armour Ave","city":"Bonner Springs","state":"KS","zip":"66012","manufacturer":"","profile":"Timberline","color":"Weathered Wood","size_sq":"","hail_met":"1.75","hail_algo":"1.25","wind":""},{"id":66,"tier":"WARM","score":7,"name":"Edward Millberger","phone":"913-299-6433","email":"","address":"Washington Ave, Kansas City, KS 66112","street":"Washington Ave","city":"Kansas City","state":"KS","zip":"66112","manufacturer":"GAF","profile":"Timberline 30","color":"Shakewood","size_sq":"48","hail_met":"1.75","hail_algo":"2.25","wind":""},{"id":67,"tier":"WARM","score":7,"name":"Anita OHora","phone":"913-231-8211","email":"amohora@yahoo.com","address":"N 32nd St, Kansas City, KS 66104","street":"N 32nd St","city":"Kansas City","state":"KS","zip":"66104","manufacturer":"Owens Corning","profile":"TruDefinition Duration","color":"Driftwood","size_sq":"14.5","hail_met":"","hail_algo":"1.5","wind":""},{"id":68,"tier":"WARM","score":7,"name":"Marian McKnight","phone":"816-942-3989","email":"","address":"E 106 Terrace, KCMO, MO 64114","street":"E 106 Terrace","city":"KCMO","state":"MO","zip":"64114","manufacturer":"Gerard","profile":"Gerard Tile","color":"Cypress","size_sq":"43","hail_met":"1.5","hail_algo":"1.25","wind":""},{"id":69,"tier":"WARM","score":7,"name":"Ron Sellars","phone":"816-765-4734","email":"ronsellarstbird@hotmail.com","address":"Bennington Ave, KCMO, MO 64134","street":"Bennington Ave","city":"KCMO","state":"MO","zip":"64134","manufacturer":"Owens Corning","profile":"Duration Tru-Def","color":"Amber","size_sq":"17","hail_met":"1.5","hail_algo":"1.25","wind":""},{"id":70,"tier":"WARM","score":7,"name":"Jay Noel","phone":"816-210-6593","email":"","address":"Bannister Rd, KCMO, MO 64134","street":"Bannister Rd","city":"KCMO","state":"MO","zip":"64134","manufacturer":"Boral","profile":"Tile","color":"Goldriver","size_sq":"14","hail_met":"1.5","hail_algo":"1.5","wind":""},{"id":71,"tier":"WARM","score":7,"name":"Jacob Huston-Lowery","phone":"816-835-5653","email":"jmhustonlowery@gmail.com","address":"NW 104th St, KCMO, MO 64154","street":"NW 104th St","city":"KCMO","state":"MO","zip":"64154","manufacturer":"Certainteed","profile":"Presidential Shake","color":"Shadow Gray","size_sq":"","hail_met":"1.5","hail_algo":"1.25","wind":""},{"id":72,"tier":"WARM","score":7,"name":"Dr. Robert & Michelle Orr M.D.","phone":"816-891-0717","email":"","address":"N Bradford Ave, KCMO, MO 64154","street":"N Bradford Ave","city":"KCMO","state":"MO","zip":"64154","manufacturer":"Boral","profile":"Shake","color":"Charcoal","size_sq":"60","hail_met":"1.5","hail_algo":"3","wind":""},{"id":73,"tier":"WARM","score":7,"name":"Bart King","phone":"816-812-3582","email":"kingrplic@gmail.com","address":"NW 104th Terrace, KCMO, MO 64154","street":"NW 104th Terrace","city":"KCMO","state":"MO","zip":"64154","manufacturer":"Unified Steel","profile":"Pine Crest Shake","color":"Timberwood","size_sq":"50","hail_met":"1.5","hail_algo":"1","wind":""},{"id":74,"tier":"WARM","score":7,"name":"Dave Goodman","phone":"913-226-8011","email":"","address":"W 155th Terrace, Olathe, KS 66062","street":"W 155th Terrace","city":"Olathe","state":"KS","zip":"66062","manufacturer":"Boral","profile":"Shake","color":"Driftwood","size_sq":"14","hail_met":"1.5","hail_algo":"1.5","wind":""},{"id":75,"tier":"WARM","score":7,"name":"Larry Deuschle","phone":"913-782-5468","email":"","address":"S Shannan Ln, Olathe, KS 66062","street":"S Shannan Ln","city":"Olathe","state":"KS","zip":"66062","manufacturer":"Boral","profile":"Tile","color":"Chestnut","size_sq":"61.5","hail_met":"1.5","hail_algo":"1.5","wind":""},{"id":76,"tier":"WARM","score":7,"name":"Steve & Cammy Schrobilgen","phone":"913-685-4988","email":"","address":"W 148th St, Overland Park, KS 66221","street":"W 148th St","city":"Overland Park","state":"KS","zip":"66221","manufacturer":"Boral","profile":"Canyon Shake","color":"Windsor","size_sq":"52","hail_met":"1.5","hail_algo":"1.5","wind":""}];
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let currentTab = 'HOT';
+let leadStates = {}; // { leadId: { status, notes, updatedAt, updatedBy } }
+let selectedIds = new Set();
+let isSelectMode = false;
+let openNotesId = null;
+let supabaseConnected = false;
+let repName = localStorage.getItem('rf_rep_name') || '';
+if (!repName) {
+  repName = prompt('Enter your name (shown with updates):') || 'Rep';
+  localStorage.setItem('rf_rep_name', repName);
+}
+
+// ═══════════════════════════════════════════════
+// SUPABASE HELPERS
+// ═══════════════════════════════════════════════
+async function sbFetch(path, opts = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...opts,
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+      ...(opts.headers || {})
+    }
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function loadLeadStates() {
+  try {
+    // Get latest update per lead_id
+    const rows = await sbFetch(`${TABLE_UPDATES}?select=lead_id,status,notes,updated_at,rep_name&order=updated_at.desc`);
+    const seen = new Set();
+    for (const r of rows) {
+      if (!seen.has(r.lead_id)) {
+        leadStates[r.lead_id] = { status: r.status, notes: r.notes, updatedAt: r.updated_at, repName: r.rep_name };
+        seen.add(r.lead_id);
+      }
+    }
+    supabaseConnected = true;
+    document.getElementById('sync-dot').className = 'sync-dot';
+  } catch(e) {
+    console.warn('Supabase load failed, using local state', e);
+    // Load from localStorage as fallback
+    const local = localStorage.getItem('rf_lead_states');
+    if (local) leadStates = JSON.parse(local);
+  }
+}
+
+async function saveUpdate(leadId, status, notes) {
+  const payload = {
+    lead_id: leadId,
+    status,
+    notes: notes || '',
+    rep_name: repName,
+    updated_at: new Date().toISOString()
+  };
+  // Always save to localStorage immediately
+  leadStates[leadId] = { status, notes, updatedAt: payload.updated_at, repName: repName };
+  localStorage.setItem('rf_lead_states', JSON.stringify(leadStates));
+
+  try {
+    await sbFetch(TABLE_UPDATES, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    showToast('✓ Saved', 'success');
+  } catch(e) {
+    showToast('Saved locally (offline)', '');
+    console.warn('Supabase save failed', e);
+  }
+  updateStats();
+  renderList();
+}
+
+// Poll for updates every 15s
+setInterval(async () => {
+  if (!supabaseConnected) return;
+  try {
+    const rows = await sbFetch(`${TABLE_UPDATES}?select=lead_id,status,notes,updated_at,rep_name&order=updated_at.desc&limit=200`);
+    const seen = new Set();
+    for (const r of rows) {
+      if (!seen.has(r.lead_id)) {
+        leadStates[r.lead_id] = { status: r.status, notes: r.notes, updatedAt: r.updated_at, repName: r.rep_name };
+        seen.add(r.lead_id);
+      }
+    }
+    updateStats();
+    renderList();
+  } catch(e) {}
+}, 15000);
+
+// ═══════════════════════════════════════════════
+// UI
+// ═══════════════════════════════════════════════
+function setTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-hot').className = 'tab' + (tab === 'HOT' ? ' active-hot' : '');
+  document.getElementById('tab-warm').className = 'tab' + (tab === 'WARM' ? ' active-warm' : '');
+  selectedIds.clear();
+  renderList();
+  updateStats();
+}
+
+function filteredLeads() {
+  const q = document.getElementById('search').value.toLowerCase();
+  return SEED_LEADS.filter(l => {
+    if (l.tier !== currentTab) return false;
+    if (!q) return true;
+    return l.name.toLowerCase().includes(q) ||
+           l.address.toLowerCase().includes(q) ||
+           l.zip.includes(q) ||
+           (l.manufacturer || '').toLowerCase().includes(q);
+  });
+}
+
+function updateStats() {
+  const all = SEED_LEADS.filter(l => l.tier === currentTab);
+  const spoke = all.filter(l => leadStates[l.id]?.status === 'spoke').length;
+  const insp = all.filter(l => leadStates[l.id]?.status === 'inspection').length;
+  const done = all.filter(l => ['spoke','inspection','not-interested'].includes(leadStates[l.id]?.status)).length;
+  document.getElementById('stat-spoke').textContent = spoke;
+  document.getElementById('stat-insp').textContent = insp;
+  document.getElementById('stat-remain').textContent = all.length - done;
+
+  // Update tab badges
+  const hotCount = SEED_LEADS.filter(l => l.tier === 'HOT' && !['not-interested'].includes(leadStates[l.id]?.status)).length;
+  const warmCount = SEED_LEADS.filter(l => l.tier === 'WARM' && !['not-interested'].includes(leadStates[l.id]?.status)).length;
+  document.getElementById('hot-badge').textContent = hotCount;
+  document.getElementById('warm-badge').textContent = warmCount;
+}
+
+function renderList() {
+  const leads = filteredLeads();
+  const listEl = document.getElementById('list');
+  if (!leads.length) {
+    listEl.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>No leads match your search.</p></div>';
+    return;
+  }
+
+  listEl.innerHTML = leads.map(l => {
+    const state = leadStates[l.id] || {};
+    const status = state.status || '';
+    const notes = state.notes || '';
+    const ts = state.updatedAt ? new Date(state.updatedAt).toLocaleString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+    const repTag = state.repName ? ` · ${state.repName}` : '';
+    const hailNum = parseFloat(l.hail_met || l.hail_algo) || 0;
+    const hailClass = hailNum >= 3 ? 'big' : 'med';
+    const hailStr = l.hail_met ? `${l.hail_met}"` : (l.hail_algo ? `~${l.hail_algo}"` : '');
+    const isSelected = selectedIds.has(l.id);
+    const notesOpen = openNotesId === l.id;
+
+    const statusLabels = [
+      { s: 'no-answer', label: '📵 No Answer' },
+      { s: 'not-home', label: '🏃 Not Home' },
+      { s: 'spoke', label: '✅ Spoke To' },
+      { s: 'inspection', label: '🏆 Inspection Set' },
+      { s: 'not-interested', label: '❌ Not Interested' },
+    ];
+
+    const mfgTag = l.manufacturer ? `<span class="meta-tag">${l.manufacturer}</span>` : '';
+    const profileTag = l.profile ? `<span class="meta-tag">${l.profile}</span>` : '';
+    const sizeTag = l.size_sq ? `<span class="meta-tag">${l.size_sq} sq</span>` : '';
+    const zipTag = `<span class="meta-tag">ZIP ${l.zip}</span>`;
+
+    const statusClass = status ? `status-${status}` : '';
+
+    return `
+    <div class="lead-card ${l.tier.toLowerCase()} ${statusClass} ${isSelected ? 'selected' : ''}"
+         id="card-${l.id}"
+         oncontextmenu="holdCard(event,${l.id})"
+         ontouchstart="startHold(${l.id})" ontouchend="cancelHold()" ontouchmove="cancelHold()">
+      <div class="card-inner">
+        <div class="select-overlay"></div>
+        ${isSelectMode ? `<div class="select-check" onclick="toggleSelect(event,${l.id})">${isSelected ? '✓' : ''}</div>` : ''}
+        <div class="card-header" onclick="${isSelectMode ? `toggleSelect(event,${l.id})` : ''}">
+          <div>
+            <div class="card-name">${l.name}</div>
+            <div class="card-address">${l.address}</div>
+            ${ts ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">${ts}${repTag}</div>` : ''}
+          </div>
+          <div class="card-right">
+            <div class="hail-badge ${hailClass}">${hailStr}</div>
+            <div class="tier-label ${l.tier.toLowerCase()}">${l.tier}</div>
+          </div>
+        </div>
+        <div class="card-meta">${mfgTag}${profileTag}${sizeTag}${zipTag}</div>
+        ${!isSelectMode ? `
+        <div class="action-row">
+          ${l.phone ? `<button class="action-btn call" onclick="callLead('${l.phone}')">📞 ${l.phone}</button>` : '<button class="action-btn" style="opacity:.4" disabled>📞 No phone</button>'}
+          <button class="action-btn map" onclick="openMap('${encodeURIComponent(l.address)}')">📍 Map</button>
+          <button class="action-btn notes ${notesOpen ? 'open-notes' : ''}" onclick="toggleNotes(${l.id})">📝 Notes</button>
+        </div>
+        <div class="status-row">
+          ${statusLabels.map(({s, label}) =>
+            `<button class="status-btn ${status === s ? 'active' : ''}" data-s="${s}" onclick="setStatus(${l.id},'${s}')">${label}</button>`
+          ).join('')}
+        </div>
+        <div class="notes-row ${notesOpen ? 'open' : ''}" id="notes-${l.id}">
+          <textarea class="notes-input" id="notes-input-${l.id}" placeholder="Notes, objections, best time to call…">${notes}</textarea>
+          <div class="notes-save-row">
+            <span class="ts">${ts ? `Last: ${ts}` : 'No updates yet'}</span>
+            <button class="save-btn" onclick="saveNotes(${l.id})">Save Notes</button>
+          </div>
+        </div>
+        ` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Route FAB
+  const fab = document.getElementById('route-fab');
+  const fabCount = document.getElementById('fab-count');
+  if (isSelectMode) {
+    fab.style.display = 'flex';
+    fabCount.textContent = selectedIds.size;
+    document.getElementById('select-count-text').textContent = `${selectedIds.size} selected`;
+  } else {
+    fab.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════════
+function setStatus(leadId, status) {
+  const current = leadStates[leadId]?.status;
+  const newStatus = current === status ? '' : status; // toggle off
+  const notes = leadStates[leadId]?.notes || '';
+  saveUpdate(leadId, newStatus, notes);
+}
+
+function toggleNotes(leadId) {
+  openNotesId = openNotesId === leadId ? null : leadId;
+  renderList();
+  if (openNotesId) {
+    setTimeout(() => {
+      const el = document.getElementById(`notes-input-${leadId}`);
+      if (el) el.focus();
+    }, 100);
+  }
+}
+
+function saveNotes(leadId) {
+  const el = document.getElementById(`notes-input-${leadId}`);
+  const notes = el ? el.value : '';
+  const status = leadStates[leadId]?.status || '';
+  saveUpdate(leadId, status, notes);
+  openNotesId = null;
+}
+
+function callLead(phone) {
+  const clean = phone.replace(/[^0-9+]/g, '');
+  window.location.href = `tel:${clean}`;
+}
+
+function openMap(addr) {
+  window.open(`https://maps.google.com/?q=${addr}`, '_blank');
+}
+
+// ── SELECT / ROUTE MODE ──
+let holdTimer = null;
+function startHold(leadId) {
+  holdTimer = setTimeout(() => {
+    if (!isSelectMode) enterSelectMode();
+    toggleSelect(null, leadId);
+  }, 500);
+}
+function cancelHold() { clearTimeout(holdTimer); }
+
+function holdCard(e, leadId) {
+  e.preventDefault();
+  if (!isSelectMode) enterSelectMode();
+  toggleSelect(null, leadId);
+}
+
+function enterSelectMode() {
+  isSelectMode = true;
+  document.getElementById('list').classList.add('route-mode');
+  document.getElementById('select-banner').classList.add('visible');
+  renderList();
+}
+
+function exitSelectMode() {
+  isSelectMode = false;
+  selectedIds.clear();
+  document.getElementById('list').classList.remove('route-mode');
+  document.getElementById('select-banner').classList.remove('visible');
+  document.getElementById('route-fab').style.display = 'none';
+  renderList();
+}
+
+function toggleSelectMode() {
+  if (isSelectMode && selectedIds.size > 0) {
+    openGoogleMapsRoute();
+  } else {
+    exitSelectMode();
+  }
+}
+
+function toggleSelect(e, leadId) {
+  if (e) e.stopPropagation();
+  if (selectedIds.has(leadId)) {
+    selectedIds.delete(leadId);
+  } else {
+    if (selectedIds.size >= 10) {
+      showToast('Max 10 stops in Google Maps route', 'error');
+      return;
+    }
+    selectedIds.add(leadId);
+  }
+  renderList();
+}
+
+function openGoogleMapsRoute() {
+  if (selectedIds.size === 0) {
+    showToast('Select at least 1 lead', 'error');
+    return;
+  }
+  const ids = Array.from(selectedIds);
+  const leads = SEED_LEADS.filter(l => ids.includes(l.id));
+  
+  if (leads.length === 1) {
+    window.open(`https://maps.google.com/?q=${encodeURIComponent(leads[0].address)}`, '_blank');
+    return;
+  }
+  
+  // Google Maps directions with waypoints
+  const encoded = leads.map(l => encodeURIComponent(l.address));
+  const dest = encoded.pop();
+  const origin = encoded.shift() || dest;
+  const waypoints = encoded.join('|');
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving`;
+  if (waypoints) url += `&waypoints=${waypoints}`;
+  window.open(url, '_blank');
+  exitSelectMode();
+}
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 2000);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+async function init() {
+  await loadLeadStates();
+  updateStats();
+  renderList();
+  document.getElementById('loading').style.display = 'none';
+}
+
+init();
+</script>
+</body>
+</html>
