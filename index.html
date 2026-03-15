@@ -198,7 +198,7 @@ function renderCard(lead) {
     ? `<a class="action-btn btn-phone" href="tel:${lead.phone}">📞 ${lead.phone}</a>`
     : '';
   const mapBtn = lead.address
-    ? `<a class="action-btn btn-map" href="https://maps.google.com/?q=${encodeURIComponent(lead.address)}" target="_blank">📍 Map</a>`
+    ? `<a class="action-btn btn-map" href="https://maps.google.com/?q=${encodeURIComponent((lead.address + ' ' + lead.city + ' ' + lead.state + ' ' + lead.zip).trim())}" target="_blank">📍 Map</a>`
     : '';
   const routeBtn = `<button class="action-btn btn-route${inRoute?' active':''}" onclick="toggleRoute(${lead.id})">${inRoute ? '✓ In Route' : '+ Route'}</button>`;
 
@@ -210,7 +210,7 @@ function renderCard(lead) {
     ['notinterested','Not Interested']
   ];
   const statusBtns = statuses.map(([key, label]) =>
-    `<button class="status-btn${status===key?' active-'+key:''}" onclick="setStatus(${lead.id},'${key}',${lead.tier?'"'+lead.tier+'"':'null'})">${label}</button>`
+    `<button class="status-btn${status===key?' active-'+key:''}" onclick="setStatus(${lead.id},'${key}')">${label}</button>`
   ).join('');
 
   const noteHistory = notes.slice(-2).map(n =>
@@ -238,7 +238,7 @@ function renderCard(lead) {
     </div>`;
 }
 
-function setStatus(leadId, status, tier) {
+function setStatus(leadId, status) {
   if (!leadStates[leadId]) leadStates[leadId] = { notes: [] };
   leadStates[leadId].status = status;
   saveLocal();
@@ -337,7 +337,7 @@ function launchRoute() {
   const allLeads = [...ALL_LEADS.hot, ...ALL_LEADS.warm, ...ALL_LEADS.mild];
   const stops = Array.from(routeSet).map(id => allLeads.find(l => l.id === id)).filter(Boolean);
   if (!stops.length) return;
-  const waypoints = stops.map(l => encodeURIComponent(l.address)).join('/');
+  const waypoints = stops.map(l => encodeURIComponent((l.address + ' ' + l.city + ' ' + l.state + ' ' + l.zip).trim())).join('/');
   window.open('https://www.google.com/maps/dir/' + waypoints, '_blank');
 }
 
