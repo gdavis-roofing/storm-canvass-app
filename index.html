@@ -51,6 +51,7 @@
   .card-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
   .action-btn { padding: 0.35rem 0.7rem; border-radius: 8px; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; }
   .btn-phone { background: #1a3a1a; color: #7ecb7e; text-decoration: none; display: inline-flex; align-items: center; }
+  .btn-text { background: #2a1a3a; color: #c9a0ff; text-decoration: none; display: inline-flex; align-items: center; }
   .btn-map { background: #1a2a3a; color: #7ec8e3; text-decoration: none; display: inline-flex; align-items: center; }
   .btn-route { background: #1a1a3a; color: #b0a0ff; }
   .btn-route.active { background: #3a2a6a; color: #e0d0ff; }
@@ -124,6 +125,33 @@ const ALL_LEADS = {
 };
 
 const CLOSED_STATUSES = ['leadgenerated','notinterested','nodamage'];
+
+const STORM_DATE = 'April 28';
+
+function buildSmsLink(lead) {
+  // Strip non-digits from phone for sms: link
+  const phone = (lead.phone || '').replace(/\D/g, '');
+  // Get a friendly first name (or "there" for businesses/missing)
+  const businessKeywords = ['Bank','Inc','LLC','Corp','Initiative','Apartments','Restaurant','Church','Inn','School'];
+  const isBusiness = businessKeywords.some(k => (lead.name || '').includes(k));
+  let firstName = 'there';
+  if (lead.name && !isBusiness) {
+    // Take everything before the last word (last word is usually surname)
+    // e.g. "Dale & Maryanne Beck" -> "Dale & Maryanne"
+    //      "Kathleen Creekmore" -> "Kathleen"
+    const parts = lead.name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      firstName = parts.slice(0, -1).join(' ');
+    } else {
+      firstName = parts[0];
+    }
+  }
+  const greeting = isBusiness ? 'Hi there' : 'Hi ' + firstName;
+  const hailText = lead.hail ? lead.hail + '" hail' : 'severe weather';
+  const message = greeting + ', George with Roofing Force here. The ' + STORM_DATE + ' storm dropped ' + hailText + ' in your area — big enough that I\'d like to come take a look at the roof we installed for you. We\'ll be in your neighborhood next week. Quick free inspection, 15 minutes, no obligation. Want me to swing by?';
+  // iPhone SMS format: sms:NUMBER&body=MESSAGE (Android prefers ?body= but iPhone is the priority)
+  return 'sms:' + phone + '&body=' + encodeURIComponent(message);
+}
 
 let repName = '';
 let currentTab = 'hot';
@@ -226,6 +254,9 @@ function renderCard(lead) {
   const phoneBtn = lead.phone
     ? `<a class="action-btn btn-phone" href="tel:${lead.phone}">📞 ${lead.phone}</a>`
     : '';
+  const textBtn = lead.phone
+    ? `<a class="action-btn btn-text" href="${buildSmsLink(lead)}">💬 Text</a>`
+    : '';
   const mapBtn = lead.address
     ? `<a class="action-btn btn-map" href="https://maps.google.com/?q=${encodeURIComponent((lead.address + ' ' + lead.city + ' ' + lead.state + ' ' + lead.zip).trim())}" target="_blank">📍 Map</a>`
     : '';
@@ -256,7 +287,7 @@ function renderCard(lead) {
       </div>
       <div class="badges">${hailBadge}${windBadge}${scoreBadge}${mfrBadge}</div>
       <div class="card-actions">
-        ${phoneBtn}${mapBtn}${routeBtn}
+        ${phoneBtn}${textBtn}${mapBtn}${routeBtn}
       </div>
       <div class="status-btns">${statusBtns}</div>
       <div class="notes-row">
