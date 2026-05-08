@@ -173,7 +173,7 @@ const STORMS = [
     id: 's1_apr28',
     label: 'April 28 — Springfield/Aurora/Republic',
     stormDate: 'April 28',
-    photoDataUri: STORM_PHOTO_DATA_URI_S1,
+    get photoDataUri() { return STORM_PHOTO_DATA_URI_S1; },
     leads: ALL_LEADS_S1
   }
   // ADD NEW STORMS HERE — example:
@@ -181,7 +181,7 @@ const STORMS = [
   //   id: 's2_may15',
   //   label: 'May 15 — TownName',
   //   stormDate: 'May 15',
-  //   photoDataUri: STORM_PHOTO_DATA_URI_S2,
+  //   get photoDataUri() { return STORM_PHOTO_DATA_URI_S2; },
   //   leads: ALL_LEADS_S2
   // }
 ];
