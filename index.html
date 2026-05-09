@@ -104,6 +104,16 @@
   .storm-picker-row { background: #1a1d2e; padding: 0.5rem 1rem 0.6rem; border-bottom: 1px solid #2a2d3e; display: flex; align-items: center; gap: 0.5rem; }
   .storm-picker-label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
   .storm-picker { flex: 1; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid #2a2d3e; background: #0f1117; color: #f0f0f0; font-size: 0.85rem; outline: none; cursor: pointer; }
+  .progress-bar { background: #1a1d2e; padding: 0.5rem 1rem; border-bottom: 1px solid #2a2d3e; }
+  .progress-track { height: 6px; background: #0f1117; border-radius: 3px; overflow: hidden; margin-bottom: 0.4rem; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #4caf50, #7eb8e3); border-radius: 3px; transition: width 0.3s; }
+  .progress-text { font-size: 0.72rem; color: #aaa; line-height: 1.4; }
+  .progress-text strong { color: #f0f0f0; }
+  .progress-pill { display: inline-block; font-size: 0.65rem; padding: 1px 6px; border-radius: 3px; margin-right: 4px; background: #2a2d3e; color: #aaa; }
+  .progress-pill.appts { background: #1a2e1a; color: #4caf50; }
+  .progress-pill.closed { background: #2e1a1a; color: #ff8a8a; }
+  .progress-pill.field { background: #1e2a3a; color: #7ec8e3; }
+  .progress-pill.progress { background: #2a2a1a; color: #d4c97e; }
   .storm-badge { font-size: 0.65rem; background: #2a1f00; color: #ffaa00; padding: 1px 6px; border-radius: 4px; vertical-align: middle; margin-left: 0.4rem; font-weight: 600; }
 </style>
 </head>
@@ -138,6 +148,10 @@
   <div class="storm-picker-row">
     <span class="storm-picker-label">Storm</span>
     <select class="storm-picker" id="storm-picker" onchange="switchStorm(this.value)"></select>
+  </div>
+  <div class="progress-bar" id="progress-bar">
+    <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    <div class="progress-text" id="progress-text"></div>
   </div>
   <div class="search-bar">
     <input type="text" id="search-input" placeholder="Search name, address, zip..." oninput="renderLeads()">
@@ -323,9 +337,58 @@ function initApp() {
 function populateStormPicker() {
   const picker = document.getElementById('storm-picker');
   if (!picker) return;
-  picker.innerHTML = STORMS.map(s =>
-    `<option value="${s.id}"${s.id === currentStormId ? ' selected' : ''}>${s.label}</option>`
-  ).join('');
+  picker.innerHTML = STORMS.map(s => {
+    const pct = computeStormProgressForStorm(s).pct;
+    return `<option value="${s.id}"${s.id === currentStormId ? ' selected' : ''}>${s.label} (${pct}%)</option>`;
+  }).join('');
+}
+
+// Statuses that count as "worked" — final outcomes
+const WORKED_STATUSES = ['apptset','leadgenerated','notinterested','nodamage','dnc','badnumber','sendtofield'];
+// Statuses that are "in progress" — touched but not final
+const INPROGRESS_STATUSES = ['leftvm','spoke','noanswer','nothome'];
+
+function computeStormProgressForStorm(storm) {
+  // Read this storm's leadStates from localStorage independently
+  const saved = localStorage.getItem('rf_lead_states_' + storm.id);
+  const states = saved ? JSON.parse(saved) : {};
+  const buckets = storm.leads || {};
+  const allLeads = [
+    ...(buckets.hot||[]),
+    ...(buckets.warm||[]),
+    ...(buckets.mild||[]),
+    ...(buckets.wind||[])
+  ];
+  const total = allLeads.length;
+  let appts=0, closed=0, field=0, inProgress=0, worked=0;
+  allLeads.forEach(l => {
+    const s = (states[l.id] || {}).status || '';
+    if (s === 'apptset' || s === 'leadgenerated') { appts++; worked++; }
+    else if (s === 'notinterested' || s === 'nodamage' || s === 'dnc' || s === 'badnumber') { closed++; worked++; }
+    else if (s === 'sendtofield') { field++; worked++; }
+    else if (INPROGRESS_STATUSES.includes(s)) { inProgress++; }
+  });
+  const pct = total === 0 ? 0 : Math.round((worked / total) * 100);
+  return { total, worked, appts, closed, field, inProgress, pct };
+}
+
+function updateProgressBar() {
+  const storm = getCurrentStorm();
+  if (!storm) return;
+  const p = computeStormProgressForStorm(storm);
+  const fill = document.getElementById('progress-fill');
+  const text = document.getElementById('progress-text');
+  if (fill) fill.style.width = p.pct + '%';
+  if (text) {
+    text.innerHTML =
+      `<strong>${p.worked}/${p.total} worked (${p.pct}%)</strong> — ` +
+      `<span class="progress-pill appts">${p.appts} appts</span>` +
+      `<span class="progress-pill closed">${p.closed} closed</span>` +
+      `<span class="progress-pill field">${p.field} sent to field</span>` +
+      `<span class="progress-pill progress">${p.inProgress} in progress</span>`;
+  }
+  // Also refresh the dropdown labels so % updates as work happens
+  populateStormPicker();
 }
 
 function switchStorm(stormId) {
@@ -384,6 +447,7 @@ function updateTabCounts() {
   document.getElementById('closed-count').textContent = '(' + closedCount + ')';
   const ffEl = document.getElementById('fieldfollowup-count');
   if (ffEl) ffEl.textContent = '(' + ffCount + ')';
+  updateProgressBar();
 }
 
 function switchTab(tab) {
