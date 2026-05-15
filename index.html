@@ -39,7 +39,28 @@
   .tab.wind.active { color: #b0d9f0; border-color: #b0d9f0; }
   .tab.leads.active { color: #4caf50; border-color: #4caf50; }
   .tab.closed.active { color: #888; border-color: #888; }
+  .tab.reports.active { color: #d4c97e; border-color: #d4c97e; }
   .tab .count { font-size: 0.7rem; opacity: 0.7; margin-left: 3px; }
+  .reports-section { padding: 0.5rem 1rem 4rem; }
+  .reports-h3 { font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin: 1.2rem 0 0.5rem; }
+  .date-filter { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.6rem; }
+  .date-filter-btn { background: #1e2130; color: #aaa; border: 1px solid #2a2d3e; border-radius: 5px; padding: 0.4rem 0.7rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+  .date-filter-btn.active { background: #2a2a4a; color: #d4c97e; border-color: #d4c97e; }
+  .csv-btn { margin-left: auto; background: #1a2e1a; color: #4caf50; border: 1px solid #4caf50; border-radius: 5px; padding: 0.4rem 0.7rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+  .funnel { background: #1a1d2e; border-radius: 8px; padding: 0.7rem 1rem; }
+  .funnel-step { display: flex; justify-content: space-between; align-items: baseline; padding: 0.35rem 0; }
+  .funnel-step-label { color: #f0f0f0; font-size: 0.85rem; font-weight: 600; }
+  .funnel-step-num { color: #d4c97e; font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .funnel-arrow { color: #666; font-size: 0.7rem; padding-left: 1rem; line-height: 1; }
+  .funnel-context { font-size: 0.72rem; color: #888; padding-top: 0.4rem; border-top: 1px solid #2a2d3e; margin-top: 0.4rem; }
+  .funnel-context strong { color: #f0f0f0; }
+  .breakdown { background: #1a1d2e; border-radius: 8px; padding: 0.6rem 0.8rem; }
+  .breakdown-row { display: grid; grid-template-columns: 7rem 1fr 4.5rem; gap: 0.5rem; align-items: center; padding: 0.28rem 0; font-size: 0.76rem; }
+  .breakdown-label { color: #f0f0f0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .breakdown-bar-bg { background: #0f1117; border-radius: 3px; height: 8px; overflow: hidden; }
+  .breakdown-bar { background: linear-gradient(90deg, #7eb8e3, #d4c97e); height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .breakdown-count { color: #aaa; text-align: right; font-variant-numeric: tabular-nums; }
+  .breakdown-empty { color: #888; font-size: 0.76rem; text-align: center; padding: 0.5rem 0; }
   .search-bar { padding: 0.6rem 1rem; background: #1a1d2e; }
   .search-bar input { width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; border: 1px solid #2a2d3e; background: #0f1117; color: #f0f0f0; font-size: 0.9rem; outline: none; }
   #leads-container { flex: 1; padding: 0.75rem; overflow-y: auto; }
@@ -143,6 +164,7 @@
       <div class="tab wind" onclick="switchTab('wind')">💨 WIND <span class="count" id="wind-count"></span></div>
       <div class="tab leads" onclick="switchTab('leads')">🎯 Leads <span class="count" id="leads-count"></span></div>
       <div class="tab closed" onclick="switchTab('closed')">✓ Closed <span class="count" id="closed-count"></span></div>
+      <div class="tab reports" onclick="switchTab('reports')">📊 Reports</div>
     </div>
   </header>
   <div class="storm-picker-row">
@@ -278,6 +300,7 @@ function buildSmsLink(lead) {
 let repName = '';
 let userRole = 'rep'; // 'rep' or 'inside_sales'
 let currentTab = 'hot';
+let reportsDateFilter = 'storm'; // 'today' | '7days' | 'storm'
 let leadStates = {};
 let routeSet = new Set();
 let syncInterval;
@@ -459,6 +482,7 @@ function switchTab(tab) {
 }
 
 function renderLeads() {
+  if (currentTab === 'reports') return renderReports();
   const query = document.getElementById('search-input').value.toLowerCase();
   const allLeads = [...(ALL_LEADS.hot||[]), ...(ALL_LEADS.warm||[]), ...(ALL_LEADS.mild||[]), ...(ALL_LEADS.wind||[])];
   let leads;
@@ -606,11 +630,210 @@ function renderCard(lead) {
     </div>`;
 }
 
+function withinDateRange(state, range) {
+  if (range === 'storm') return true;
+  if (!state || !state.statusTs) return false;
+  const ts = new Date(state.statusTs).getTime();
+  if (isNaN(ts)) return false;
+  if (range === 'today') {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    return ts >= start.getTime();
+  }
+  if (range === '7days') return ts >= Date.now() - 7 * 86400000;
+  return true;
+}
+
+function setReportsDateFilter(range) {
+  reportsDateFilter = range;
+  renderReports();
+}
+
+// Rep funnel ends at "Leads generated" — that's the canvassing win.
+// Signed contracts live in AccuLynx, not in this app.
+// For IS, funnel ends at "Appts set"; sendtofield is a parallel positive outcome shown as a context line, not a stage.
+function computeFunnel(leads, states, role) {
+  let attempted = 0, contacted = 0, won = 0, rejected = 0, sentToField = 0;
+  if (role === 'inside_sales') {
+    leads.forEach(l => {
+      const s = (states[l.id] || {}).status || '';
+      if (!s) return;
+      attempted++;
+      if (['spoke','apptset','notinterested','sendtofield'].includes(s)) contacted++;
+      if (s === 'apptset') won++;
+      if (['notinterested','badnumber','dnc'].includes(s)) rejected++;
+      if (s === 'sendtofield') sentToField++;
+    });
+    return {
+      role,
+      stages: [
+        { label: 'Total', count: leads.length },
+        { label: 'Attempted', count: attempted },
+        { label: 'Spoke', count: contacted },
+        { label: 'Appts set', count: won }
+      ],
+      context: { rejected, sentToField }
+    };
+  }
+  leads.forEach(l => {
+    const s = (states[l.id] || {}).status || '';
+    if (!s) return;
+    attempted++;
+    if (['leadgenerated','notinterested','nodamage'].includes(s)) contacted++;
+    if (s === 'leadgenerated') won++;
+    if (['notinterested','nodamage'].includes(s)) rejected++;
+  });
+  return {
+    role,
+    stages: [
+      { label: 'Total', count: leads.length },
+      { label: 'Doors worked', count: attempted },
+      { label: 'Contact made', count: contacted },
+      { label: 'Leads generated', count: won }
+    ],
+    context: { rejected, sentToField: 0 }
+  };
+}
+
+function computeStatusBreakdown(leads, states, role) {
+  const statusList = role === 'inside_sales' ? IS_STATUSES : REP_STATUSES;
+  const counts = {};
+  statusList.forEach(([key]) => { counts[key] = 0; });
+  let totalWithStatus = 0;
+  leads.forEach(l => {
+    const s = (states[l.id] || {}).status || '';
+    if (counts.hasOwnProperty(s)) { counts[s]++; totalWithStatus++; }
+  });
+  return statusList.map(([key, label]) => ({
+    key, label,
+    count: counts[key],
+    pct: totalWithStatus === 0 ? 0 : Math.round((counts[key] / totalWithStatus) * 100)
+  }));
+}
+
+function computeCityBreakdown(leads) {
+  const counts = {};
+  leads.forEach(l => {
+    const city = ((l.city || '').trim()) || 'Unknown';
+    counts[city] = (counts[city] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([city, count]) => ({ city, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function renderReports() {
+  const allLeads = [...(ALL_LEADS.hot||[]), ...(ALL_LEADS.warm||[]), ...(ALL_LEADS.mild||[]), ...(ALL_LEADS.wind||[])];
+  const filtered = reportsDateFilter === 'storm'
+    ? allLeads
+    : allLeads.filter(l => withinDateRange(leadStates[l.id], reportsDateFilter));
+
+  const funnel = computeFunnel(filtered, leadStates, userRole);
+  // For time-windowed views, show full storm size as the denominator so percentages remain interpretable.
+  if (reportsDateFilter !== 'storm') {
+    funnel.stages[0] = { label: 'Total (storm)', count: allLeads.length };
+  }
+  const statusBreakdown = computeStatusBreakdown(filtered, leadStates, userRole);
+  const cityBreakdown = computeCityBreakdown(filtered);
+
+  const funnelHtml = funnel.stages.map((stage, i) => {
+    const next = funnel.stages[i + 1];
+    const arrow = next
+      ? `<div class="funnel-arrow">↓ ${stage.count === 0 ? '—' : Math.round(next.count / stage.count * 100) + '%'}</div>`
+      : '';
+    return `<div class="funnel-step"><span class="funnel-step-label">${stage.label}</span><span class="funnel-step-num">${stage.count}</span></div>${arrow}`;
+  }).join('');
+
+  const ctxParts = [];
+  if (funnel.context.rejected > 0) ctxParts.push(`Rejected: <strong>${funnel.context.rejected}</strong>`);
+  if (funnel.context.sentToField > 0) ctxParts.push(`Sent to field: <strong>${funnel.context.sentToField}</strong>`);
+  const ctxHtml = ctxParts.length ? `<div class="funnel-context">${ctxParts.join(' &nbsp;·&nbsp; ')}</div>` : '';
+
+  const statusHtml = statusBreakdown.map(s => `
+    <div class="breakdown-row">
+      <span class="breakdown-label">${s.label}</span>
+      <div class="breakdown-bar-bg"><div class="breakdown-bar" style="width:${s.pct}%"></div></div>
+      <span class="breakdown-count">${s.count} (${s.pct}%)</span>
+    </div>`).join('');
+
+  const maxCity = cityBreakdown.length ? cityBreakdown[0].count : 1;
+  const cityHtml = cityBreakdown.map(c => {
+    const pct = Math.round((c.count / maxCity) * 100);
+    return `<div class="breakdown-row">
+      <span class="breakdown-label">${c.city}</span>
+      <div class="breakdown-bar-bg"><div class="breakdown-bar" style="width:${pct}%"></div></div>
+      <span class="breakdown-count">${c.count}</span>
+    </div>`;
+  }).join('');
+
+  const btn = (range, label) =>
+    `<button class="date-filter-btn${reportsDateFilter === range ? ' active' : ''}" onclick="setReportsDateFilter('${range}')">${label}</button>`;
+
+  const totalWithStatus = statusBreakdown.reduce((a, b) => a + b.count, 0);
+  const roleLabel = userRole === 'inside_sales' ? 'Inside Sales' : 'Rep';
+
+  document.getElementById('leads-container').innerHTML = `
+    <div class="reports-section">
+      <div class="date-filter">
+        ${btn('today', 'Today')}
+        ${btn('7days', 'Last 7 days')}
+        ${btn('storm', 'This storm')}
+        <button class="csv-btn" onclick="exportCsv()">⬇ Export CSV</button>
+      </div>
+      <h3 class="reports-h3">Funnel — ${roleLabel}</h3>
+      <div class="funnel">${funnelHtml}${ctxHtml}</div>
+      <h3 class="reports-h3">Status breakdown — ${roleLabel}</h3>
+      <div class="breakdown">${totalWithStatus ? statusHtml : '<div class="breakdown-empty">No status activity in range</div>'}</div>
+      <h3 class="reports-h3">City breakdown</h3>
+      <div class="breakdown">${cityBreakdown.length ? cityHtml : '<div class="breakdown-empty">No leads in range</div>'}</div>
+    </div>
+  `;
+}
+
+function exportCsv() {
+  const allLeads = [...(ALL_LEADS.hot||[]), ...(ALL_LEADS.warm||[]), ...(ALL_LEADS.mild||[]), ...(ALL_LEADS.wind||[])];
+  const filtered = reportsDateFilter === 'storm'
+    ? allLeads
+    : allLeads.filter(l => withinDateRange(leadStates[l.id], reportsDateFilter));
+  const esc = v => {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = [['name','address','city','phone','status','notes','timestamp','rep_name']];
+  filtered.forEach(l => {
+    const st = leadStates[l.id] || {};
+    const notes = (st.notes || []).map(n => `[${n.ts || ''} ${n.rep || ''}] ${n.text || ''}`).join(' | ');
+    rows.push([
+      l.name || '',
+      l.address || '',
+      l.city || '',
+      l.phone || l.cellPhone || '',
+      st.status || '',
+      notes,
+      st.statusTs || '',
+      st.setBy || ''
+    ]);
+  });
+  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+  const stormId = (getCurrentStorm() || {}).id || 'storm';
+  const filename = `storm-canvass-${stormId}-${reportsDateFilter}-${new Date().toISOString().slice(0,10)}.csv`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function setStatus(leadId, status) {
   if (!leadStates[leadId]) leadStates[leadId] = { notes: [] };
   leadStates[leadId].status = status;
   leadStates[leadId].setBy = repName;
   leadStates[leadId].setByRole = userRole;
+  leadStates[leadId].statusTs = new Date().toISOString();
   saveLocal();
   pushUpdate(leadId, status, '');
   updateTabCounts();
