@@ -310,7 +310,8 @@ const REP_STATUSES = [
   ['nothome','Not Home'],
   ['leadgenerated','Lead Generated'],
   ['notinterested','Not Interested'],
-  ['nodamage','No Damage']
+  ['nodamage','No Damage'],
+  ['sendtofield','Field Follow up']
 ];
 const IS_STATUSES = [
   ['leftvm','Left VM'],
@@ -601,7 +602,11 @@ function renderCard(lead) {
     const labelMap = {apptset: '📞 Appt Set', spoke: '📞 Inside Sales spoke with them', leftvm: '📞 Inside Sales left VM'};
     xBanner = `<div class="is-action-banner">${labelMap[status]} (by ${setter})</div>`;
   } else if (userRole === 'rep' && status === 'sendtofield') {
-    xBanner = `<div class="field-followup-banner">📤 Sent to Field by ${state.setBy || 'Inside Sales'} — couldn't reach by phone</div>`;
+    if (state.setByRole === 'rep') {
+      xBanner = `<div class="field-followup-banner">📤 Marked for field follow-up by ${state.setBy || 'Rep'}</div>`;
+    } else {
+      xBanner = `<div class="field-followup-banner">📤 Sent to Field by ${state.setBy || 'Inside Sales'} — couldn't reach by phone</div>`;
+    }
   } else if (userRole === 'inside_sales' && status === 'leadgenerated') {
     const setter = state.setBy || 'Rep';
     xBanner = `<div class="field-followup-banner">✓ Booked by Rep ${setter}</div>`;
@@ -681,6 +686,7 @@ function computeFunnel(leads, states, role) {
     if (['leadgenerated','notinterested','nodamage'].includes(s)) contacted++;
     if (s === 'leadgenerated') won++;
     if (['notinterested','nodamage'].includes(s)) rejected++;
+    if (s === 'sendtofield') sentToField++;
   });
   return {
     role,
@@ -690,7 +696,7 @@ function computeFunnel(leads, states, role) {
       { label: 'Contact made', count: contacted },
       { label: 'Leads generated', count: won }
     ],
-    context: { rejected, sentToField: 0 }
+    context: { rejected, sentToField }
   };
 }
 
